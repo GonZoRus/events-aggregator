@@ -1,0 +1,20 @@
+[project]
+name = "events-aggregator"
+version = "0.1.0"
+description = "backend-агрегатор событий"
+readme = "README.md"
+authors = [
+    { name = "Aleksander Karmanov", email = "karmanov.aleks2016@yandex.ru" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.141.1",
+    "uvicorn>=0.52.4",
+]
+
+[project.scripts]
+events-aggregator = "events_aggregator:main"
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"
