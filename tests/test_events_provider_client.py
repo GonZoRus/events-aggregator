@@ -11,7 +11,7 @@ def test_provider_client():
 
 
 @pytest.mark.asyncio
-async def test_provider_client_async():
+async def test_events_returns_json_and_calls_provider():
 	with patch("events_aggregator.clients.events_provider.httpx.AsyncClient") as fake_client:
 		client = EventsProviderClient(base_url="http://example.com", api_key="fake_key")
 
@@ -33,3 +33,23 @@ async def test_provider_client_async():
 		)
 		fake_client.assert_called_once_with(base_url="http://example.com",
 		                                    headers={"x-api-key": "fake_key"})
+
+
+@pytest.mark.asyncio
+async def test_get_page():
+	with patch("events_aggregator.clients.events_provider.httpx.AsyncClient") as fake_client:
+		client = EventsProviderClient(base_url="http://example.com", api_key="fake_key")
+
+		mock_http_client = fake_client.return_value
+		fake_response = Mock()
+		mock_http_client.get = AsyncMock(return_value=fake_response)
+		fake_json = {
+			"next": "http://example_next.com",
+			"results": [{"id": "1", "name": "Test event"}],
+		}
+		next_url = "http://example_next.com"
+		fake_response.json.return_value = fake_json
+		result = await client.get_page(next_url)
+		assert result == fake_json
+		mock_http_client.get.assert_awaited_once_with(next_url)
+		fake_response.raise_for_status.assert_called_once_with()
