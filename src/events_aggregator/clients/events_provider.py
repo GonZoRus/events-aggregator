@@ -1,6 +1,8 @@
 import httpx
 from collections import deque
 
+from pydantic import json
+
 
 class EventsProviderClient:
 	def __init__(self, base_url: str, api_key: str):
@@ -13,6 +15,38 @@ class EventsProviderClient:
 
 	async def get_page(self, url: str) -> dict:
 		response = await self.client.get(url)
+		response.raise_for_status()
+		return response.json()
+
+	async def seats(self, event_id: str) -> list[str]:
+		response = await self.client.get(f"/api/events/{event_id}/seats/")
+		response.raise_for_status()
+		available_seats = response.json()["seats"]
+		return available_seats
+
+	async def register(
+			self, event_id: str,
+			first_name: str, last_name: str,
+			email: str, seat: str) -> str:
+		data = {
+			"first_name": first_name,
+			"last_name": last_name,
+			"email": email,
+			"seat": seat
+
+		}
+		response = await self.client.post(f"/api/events/{event_id}/register/", json=data)
+		response.raise_for_status()
+		ticket_id = response.json()["ticket_id"]
+		return ticket_id
+
+	async def unregister(self, event_id: str, ticket_id: str) -> dict:
+		body = {"ticket_id": ticket_id}
+		response = await self.client.request(
+			"DELETE",
+			f"/api/events/{event_id}/unregister/",
+			json=body,
+		)
 		response.raise_for_status()
 		return response.json()
 
