@@ -1,9 +1,6 @@
-from sqlalchemy.ext.asyncio import (
-	AsyncSession, create_async_engine, async_sessionmaker)
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-
-
-DATABASE_URL = "postgresql+asyncpg://events_user:password_db@localhost:5433/events"
+from events_aggregator.config import DATABASE_URL
 
 engine = create_async_engine(DATABASE_URL)
 
