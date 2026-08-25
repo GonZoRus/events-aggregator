@@ -6,7 +6,7 @@ from events_aggregator.db.base import Base
 
 
 class Place(Base):
-    __tablename__ = 'places'
+    __tablename__ = "places"
 
     id: Mapped[UUID] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column()

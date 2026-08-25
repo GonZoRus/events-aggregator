@@ -22,5 +22,7 @@ class SyncMetadata(Base):
     last_changed_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True))
     sync_status: Mapped[SyncStatus] = mapped_column(
         SQLEnum(
-            SyncStatus, values_callable=lambda enum_cls: [item.value for item in enum_cls])
+            SyncStatus,
+            values_callable=lambda enum_cls: [item.value for item in enum_cls],
+        )
     )

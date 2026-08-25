@@ -16,6 +16,8 @@ class Event(Base):
     place_id: Mapped[UUID] = mapped_column(ForeignKey("places.id"))
     name: Mapped[str] = mapped_column()
     event_time: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True))
-    registration_deadline: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True))
+    registration_deadline: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True)
+    )
     status: Mapped[str] = mapped_column()
     number_of_visitors: Mapped[int] = mapped_column()

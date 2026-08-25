@@ -29,6 +29,7 @@ target_metadata = Base.metadata
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
 
+
 def do_run_migrations(connection):
     context.configure(
         connection=connection,
@@ -37,6 +38,7 @@ def do_run_migrations(connection):
 
     with context.begin_transaction():
         context.run_migrations()
+
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
@@ -77,7 +79,6 @@ async def run_migrations_online() -> None:
 
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
-
 
 
 if context.is_offline_mode():
