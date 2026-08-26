@@ -8,7 +8,7 @@ from events_aggregator.schemas.provider import ProviderEventsResponse
 class EventsProviderClient:
     def __init__(self, base_url: str, api_key: str):
         self.client = httpx.AsyncClient(
-            base_url=base_url, headers={"x-api-key": api_key}
+            base_url=base_url, headers={"x-api-key": api_key}, follow_redirects=True
         )
 
     async def events(self, date: str) -> ProviderEventsResponse:
