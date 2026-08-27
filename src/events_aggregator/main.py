@@ -17,11 +17,13 @@ from events_aggregator.schemas.event_details import EventDetails
 from events_aggregator.schemas.events import EventResponse, EventsResponse
 from events_aggregator.schemas.seats import SeatsResponse
 from events_aggregator.schemas.tickets import TicketPost, TicketResponse
-from events_aggregator.services.creat_tiket import CreateTicketUsecase
+from events_aggregator.services.creat_ticket import CreateTicketUsecase
+from events_aggregator.services.delet_ticket import DeleteTicketUsecase
 from events_aggregator.services.exceptions import (
     EventNotFound,
     ProviderUnavailable,
     SeatAlreadyTaken,
+    TicketNotFound,
 )
 from events_aggregator.services.sync import SyncService
 
@@ -54,10 +56,10 @@ async def trigger_sync(session: Annotated[AsyncSession, Depends(get_session)]):
     "/api/events", tags=["Получение списка событий"], response_model=EventsResponse
 )
 async def get_events(
-        session: Annotated[AsyncSession, Depends(get_session)],
-        date_from: date | None = None,
-        page: int = Query(1, ge=1),
-        page_size: int = Query(20, ge=1),
+    session: Annotated[AsyncSession, Depends(get_session)],
+    date_from: date | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1),
 ):
     event_repository = EventRepository(session)
     count = await event_repository.count_events(date_from=date_from)
@@ -107,8 +109,8 @@ async def get_events(
     response_model=EventDetails,
 )
 async def get_event_details(
-        session: Annotated[AsyncSession, Depends(get_session)],
-        event_id: uuid.UUID,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    event_id: uuid.UUID,
 ) -> EventDetails:
     event_repository = EventRepository(session)
     res = await event_repository.get_event_with_place_by_id(event_id)
@@ -143,42 +145,52 @@ async def get_seats(event_id: uuid.UUID) -> SeatsResponse:
 
 
 @app.post(
-    '/api/tickets', tags=["Регистрация на событие"],
+    "/api/tickets",
+    tags=["Регистрация на событие"],
     status_code=201,
-    response_model=TicketResponse)
+    response_model=TicketResponse,
+)
 async def create_ticket(
-        session: Annotated[AsyncSession, Depends(get_session)],
-        data: TicketPost) -> TicketResponse:
+    session: Annotated[AsyncSession, Depends(get_session)], data: TicketPost
+) -> TicketResponse:
     ticket_repository = TicketRepository(session)
     client = EventsProviderClient(EVENTS_PROVIDER_BASE_URL, EVENTS_PROVIDER_API_KEY)
     create_ticket_usecase = CreateTicketUsecase(
-        client=client,
-        ticket_repository=ticket_repository
+        client=client, ticket_repository=ticket_repository
     )
     try:
-
         ticket_id = await create_ticket_usecase.execute(
             event_id=data.event_id,
             first_name=data.first_name,
             last_name=data.last_name,
             email=data.email,
-            seat=data.seat)
-    except SeatAlreadyTaken:
-        raise HTTPException(
-            status_code=400,
-            detail="Место уже занято"
+            seat=data.seat,
         )
+    except SeatAlreadyTaken:
+        raise HTTPException(status_code=400, detail="Место уже занято")
     except EventNotFound:
         raise HTTPException(
-            status_code=404,
-            detail="Событие с указанным ID не найдено."
+            status_code=404, detail="Событие с указанным ID не найдено."
         )
     except ProviderUnavailable:
-        raise HTTPException(
-            status_code=502,
-            detail='Ошибка внешнего сервиса'
-        )
+        raise HTTPException(status_code=502, detail="Ошибка внешнего сервиса")
 
-    return TicketResponse(
-        ticket_id=ticket_id
+    return TicketResponse(ticket_id=ticket_id)
+
+
+@app.delete("/api/tickets/{ticket_id}", tags=["Отмена регистрации"], status_code=200)
+async def delete_ticket(
+    ticket_id: uuid.UUID, session: Annotated[AsyncSession, Depends(get_session)]
+):
+    ticket_repository = TicketRepository(session)
+    client = EventsProviderClient(EVENTS_PROVIDER_BASE_URL, EVENTS_PROVIDER_API_KEY)
+    delete_ticket_usecase = DeleteTicketUsecase(
+        client=client, ticket_repository=ticket_repository
     )
+    try:
+        await delete_ticket_usecase.execute(ticket_id)
+    except TicketNotFound:
+        raise HTTPException(status_code=404, detail="Билет не найден")
+    except ProviderUnavailable:
+        raise HTTPException(status_code=502, detail="Ошибка внешнего сервиса")
+    return {"success": True}
