@@ -1,3 +1,4 @@
+import uuid
 from collections import deque
 
 import httpx
@@ -21,7 +22,7 @@ class EventsProviderClient:
         response.raise_for_status()
         return ProviderEventsResponse.model_validate(response.json())
 
-    async def seats(self, event_id: str) -> list[str]:
+    async def seats(self, event_id: uuid.UUID) -> list[str]:
         response = await self.client.get(f"/api/events/{event_id}/seats/")
         response.raise_for_status()
         available_seats = response.json()["seats"]

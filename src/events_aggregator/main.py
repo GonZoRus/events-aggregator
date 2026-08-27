@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from events_aggregator.cache import get_cached_seats, save_cached_seats
 from events_aggregator.clients.events_provider import EventsProviderClient
 from events_aggregator.config import EVENTS_PROVIDER_API_KEY, EVENTS_PROVIDER_BASE_URL
 from events_aggregator.db.session import get_session
@@ -13,6 +14,7 @@ from events_aggregator.repositories.place import PlaceRepository
 from events_aggregator.repositories.sync_metadata import SyncMetadataRepository
 from events_aggregator.schemas.event_details import EventDetails
 from events_aggregator.schemas.events import EventResponse, EventsResponse
+from events_aggregator.schemas.seats import SeatsResponse
 from events_aggregator.services.sync import SyncService
 
 app = FastAPI()
@@ -44,10 +46,10 @@ async def trigger_sync(session: Annotated[AsyncSession, Depends(get_session)]):
     "/api/events", tags=["Получение списка событий"], response_model=EventsResponse
 )
 async def get_events(
-        session: Annotated[AsyncSession, Depends(get_session)],
-        date_from: date | None = None,
-        page: int = Query(1, ge=1),
-        page_size: int = Query(20, ge=1),
+    session: Annotated[AsyncSession, Depends(get_session)],
+    date_from: date | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1),
 ):
     event_repository = EventRepository(session)
     count = await event_repository.count_events(date_from=date_from)
@@ -91,20 +93,42 @@ async def get_events(
     return events_response
 
 
-@app.get("/api/events/{event_id}",
-         tags=["Получение деталей события"],
-         response_model=EventDetails)
-
+@app.get(
+    "/api/events/{event_id}",
+    tags=["Получение деталей события"],
+    response_model=EventDetails,
+)
 async def get_event_details(
-        session: Annotated[AsyncSession, Depends(get_session)],
-        event_id: uuid.UUID,
-)-> EventDetails:
+    session: Annotated[AsyncSession, Depends(get_session)],
+    event_id: uuid.UUID,
+) -> EventDetails:
     event_repository = EventRepository(session)
     res = await event_repository.get_event_with_place_by_id(event_id)
     if res is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Событие с таким id не найдено"
-        )
+        raise HTTPException(status_code=404, detail="Событие с таким id не найдено")
     return EventDetails.model_validate(res)
 
+
+@app.get(
+    "/api/events/{event_id}/seats",
+    tags=["Получение информации о местах"],
+    response_model=SeatsResponse,
+)
+async def get_seats(event_id: uuid.UUID) -> SeatsResponse:
+    cached = get_cached_seats(event_id)
+    if cached is not None:
+        res = SeatsResponse(
+            event_id=event_id,
+            available_seats=cached["seats"],
+        )
+        return res
+
+    client = EventsProviderClient(EVENTS_PROVIDER_BASE_URL, EVENTS_PROVIDER_API_KEY)
+    seats = await client.seats(event_id)
+
+    result = SeatsResponse(
+        event_id=event_id,
+        available_seats=seats,
+    )
+    save_cached_seats(seats, event_id)
+    return result
