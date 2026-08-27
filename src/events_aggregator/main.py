@@ -12,9 +12,17 @@ from events_aggregator.db.session import get_session
 from events_aggregator.repositories.event import EventRepository
 from events_aggregator.repositories.place import PlaceRepository
 from events_aggregator.repositories.sync_metadata import SyncMetadataRepository
+from events_aggregator.repositories.ticket import TicketRepository
 from events_aggregator.schemas.event_details import EventDetails
 from events_aggregator.schemas.events import EventResponse, EventsResponse
 from events_aggregator.schemas.seats import SeatsResponse
+from events_aggregator.schemas.tickets import TicketPost, TicketResponse
+from events_aggregator.services.creat_tiket import CreateTicketUsecase
+from events_aggregator.services.exceptions import (
+    EventNotFound,
+    ProviderUnavailable,
+    SeatAlreadyTaken,
+)
 from events_aggregator.services.sync import SyncService
 
 app = FastAPI()
@@ -46,10 +54,10 @@ async def trigger_sync(session: Annotated[AsyncSession, Depends(get_session)]):
     "/api/events", tags=["Получение списка событий"], response_model=EventsResponse
 )
 async def get_events(
-    session: Annotated[AsyncSession, Depends(get_session)],
-    date_from: date | None = None,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1),
+        session: Annotated[AsyncSession, Depends(get_session)],
+        date_from: date | None = None,
+        page: int = Query(1, ge=1),
+        page_size: int = Query(20, ge=1),
 ):
     event_repository = EventRepository(session)
     count = await event_repository.count_events(date_from=date_from)
@@ -99,8 +107,8 @@ async def get_events(
     response_model=EventDetails,
 )
 async def get_event_details(
-    session: Annotated[AsyncSession, Depends(get_session)],
-    event_id: uuid.UUID,
+        session: Annotated[AsyncSession, Depends(get_session)],
+        event_id: uuid.UUID,
 ) -> EventDetails:
     event_repository = EventRepository(session)
     res = await event_repository.get_event_with_place_by_id(event_id)
@@ -132,3 +140,45 @@ async def get_seats(event_id: uuid.UUID) -> SeatsResponse:
     )
     save_cached_seats(seats, event_id)
     return result
+
+
+@app.post(
+    '/api/tickets', tags=["Регистрация на событие"],
+    status_code=201,
+    response_model=TicketResponse)
+async def create_ticket(
+        session: Annotated[AsyncSession, Depends(get_session)],
+        data: TicketPost) -> TicketResponse:
+    ticket_repository = TicketRepository(session)
+    client = EventsProviderClient(EVENTS_PROVIDER_BASE_URL, EVENTS_PROVIDER_API_KEY)
+    create_ticket_usecase = CreateTicketUsecase(
+        client=client,
+        ticket_repository=ticket_repository
+    )
+    try:
+
+        ticket_id = await create_ticket_usecase.execute(
+            event_id=data.event_id,
+            first_name=data.first_name,
+            last_name=data.last_name,
+            email=data.email,
+            seat=data.seat)
+    except SeatAlreadyTaken:
+        raise HTTPException(
+            status_code=400,
+            detail="Место уже занято"
+        )
+    except EventNotFound:
+        raise HTTPException(
+            status_code=404,
+            detail="Событие с указанным ID не найдено."
+        )
+    except ProviderUnavailable:
+        raise HTTPException(
+            status_code=502,
+            detail='Ошибка внешнего сервиса'
+        )
+
+    return TicketResponse(
+        ticket_id=ticket_id
+    )
