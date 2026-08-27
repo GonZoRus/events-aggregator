@@ -10,5 +10,6 @@ class TicketPost(BaseModel):
     email: EmailStr
     seat: str
 
+
 class TicketResponse(BaseModel):
     ticket_id: uuid.UUID

@@ -13,26 +13,26 @@ from events_aggregator.services.exceptions import (
 
 class CreateTicketUsecase:
     def __init__(
-            self,
-            client: EventsProviderClient,
-            ticket_repository: TicketRepository):
+        self, client: EventsProviderClient, ticket_repository: TicketRepository
+    ):
         self.client = client
         self.ticket_repository = ticket_repository
 
     async def execute(
-            self,
-            event_id: uuid.UUID,
-            first_name: str,
-            last_name: str,
-            email: str,
-            seat: str) -> str:
+        self,
+        event_id: uuid.UUID,
+        first_name: str,
+        last_name: str,
+        email: str,
+        seat: str,
+    ) -> str:
         try:
             ticket_id = await self.client.register(
                 event_id=event_id,
                 first_name=first_name,
                 last_name=last_name,
                 email=email,
-                seat=seat
+                seat=seat,
             )
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 400:
