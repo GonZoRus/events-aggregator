@@ -41,3 +41,9 @@ class EventRepository:
         res = await self.session.execute(query)
         counts = res.scalar_one()
         return counts
+
+    async def get_event_with_place_by_id(self, event_id: UUID) -> Event | None:
+        query = select(Event).options(selectinload(Event.place))
+        query = query.where(Event.id == event_id)
+        res = await self.session.execute(query)
+        return res.scalar_one_or_none()

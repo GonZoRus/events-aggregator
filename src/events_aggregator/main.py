@@ -1,3 +1,4 @@
+import uuid
 from datetime import date
 from typing import Annotated
 
@@ -10,6 +11,7 @@ from events_aggregator.db.session import get_session
 from events_aggregator.repositories.event import EventRepository
 from events_aggregator.repositories.place import PlaceRepository
 from events_aggregator.repositories.sync_metadata import SyncMetadataRepository
+from events_aggregator.schemas.event_details import EventDetails
 from events_aggregator.schemas.events import EventResponse, EventsResponse
 from events_aggregator.services.sync import SyncService
 
@@ -42,12 +44,11 @@ async def trigger_sync(session: Annotated[AsyncSession, Depends(get_session)]):
     "/api/events", tags=["Получение списка событий"], response_model=EventsResponse
 )
 async def get_events(
-    session: Annotated[AsyncSession, Depends(get_session)],
-    date_from: date | None = None,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1),
+        session: Annotated[AsyncSession, Depends(get_session)],
+        date_from: date | None = None,
+        page: int = Query(1, ge=1),
+        page_size: int = Query(20, ge=1),
 ):
-
     event_repository = EventRepository(session)
     count = await event_repository.count_events(date_from=date_from)
     events = await event_repository.get_events(
@@ -88,3 +89,22 @@ async def get_events(
     )
 
     return events_response
+
+
+@app.get("/api/events/{event_id}",
+         tags=["Получение деталей события"],
+         response_model=EventDetails)
+
+async def get_event_details(
+        session: Annotated[AsyncSession, Depends(get_session)],
+        event_id: uuid.UUID,
+)-> EventDetails:
+    event_repository = EventRepository(session)
+    res = await event_repository.get_event_with_place_by_id(event_id)
+    if res is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Событие с таким id не найдено"
+        )
+    return EventDetails.model_validate(res)
+
