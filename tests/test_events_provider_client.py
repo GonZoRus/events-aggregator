@@ -11,8 +11,10 @@ def test_provider_client():
     ) as fake_client:
         EventsProviderClient(base_url="http://example.com", api_key="fake_key")
         fake_client.assert_called_once_with(
-            base_url="http://example.com", headers={"x-api-key": "fake_key"},
-            follow_redirects=True)
+            base_url="http://example.com",
+            headers={"x-api-key": "fake_key"},
+            follow_redirects=True,
+        )
 
 
 @pytest.mark.asyncio
