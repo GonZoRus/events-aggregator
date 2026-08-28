@@ -1,10 +1,13 @@
+import asyncio
 import uuid
+from contextlib import asynccontextmanager
 from datetime import date
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from events_aggregator.background import run_daily_sync
 from events_aggregator.cache import get_cached_seats, save_cached_seats
 from events_aggregator.clients.events_provider import EventsProviderClient
 from events_aggregator.config import EVENTS_PROVIDER_API_KEY, EVENTS_PROVIDER_BASE_URL
@@ -27,7 +30,21 @@ from events_aggregator.services.exceptions import (
 )
 from events_aggregator.services.sync import SyncService
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = asyncio.create_task(run_daily_sync())
+
+    yield
+
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 @app.get("/api/health")
