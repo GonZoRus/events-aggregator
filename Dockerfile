@@ -9,4 +9,4 @@ COPY src ./src
 RUN uv sync --frozen --no-dev
 COPY alembic ./alembic
 COPY alembic.ini ./
-CMD ["sh", "-c", "uv run alembic upgrade head && uv run uvicorn events_aggregator.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", ".venv/bin/alembic upgrade head && .venv/bin/uvicorn events_aggregator.main:app --host 0.0.0.0 --port 8000"]
