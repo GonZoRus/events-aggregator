@@ -11,8 +11,8 @@ def test_provider_client():
     ) as fake_client:
         EventsProviderClient(base_url="http://example.com", api_key="fake_key")
         fake_client.assert_called_once_with(
-            base_url="http://example.com", headers={"x-api-key": "fake_key"}
-        )
+            base_url="http://example.com", headers={"x-api-key": "fake_key"},
+            follow_redirects=True)
 
 
 @pytest.mark.asyncio
@@ -20,26 +20,62 @@ async def test_events_returns_json_and_calls_provider():
     with patch(
         "events_aggregator.clients.events_provider.httpx.AsyncClient"
     ) as fake_client:
-        client = EventsProviderClient(base_url="http://example.com", api_key="fake_key")
+        client = EventsProviderClient(
+            base_url="http://example.com",
+            api_key="fake_key",
+        )
 
         mock_http_client = fake_client.return_value
         fake_response = Mock()
         mock_http_client.get = AsyncMock(return_value=fake_response)
+
         fake_json = {
             "next": None,
-            "results": [{"id": "1", "name": "Test event"}],
+            "previous": None,
+            "results": [
+                {
+                    "id": "550e8400-e29b-41d4-a716-446655440000",
+                    "name": "Test event",
+                    "place": {
+                        "id": "660e8400-e29b-41d4-a716-446655440000",
+                        "name": "Test place",
+                        "city": "Moscow",
+                        "address": "Test address",
+                        "seats_pattern": "A1-100",
+                        "changed_at": "2026-01-01T10:00:00+03:00",
+                        "created_at": "2025-12-01T10:00:00+03:00",
+                    },
+                    "event_time": "2026-01-11T17:00:00+03:00",
+                    "registration_deadline": "2026-01-10T17:00:00+03:00",
+                    "status": "published",
+                    "number_of_visitors": 5,
+                    "changed_at": "2026-01-01T10:00:00+03:00",
+                    "created_at": "2025-12-01T10:00:00+03:00",
+                    "status_changed_at": "2026-01-01T10:00:00+03:00",
+                }
+            ],
         }
+
         fake_response.json.return_value = fake_json
 
         result = await client.events(date="2020-04-01")
+
         fake_response.raise_for_status.assert_called_once_with()
-        assert result == fake_json
+
+        assert result.next is None
+        assert result.previous is None
+        assert len(result.results) == 1
+        assert result.results[0].name == "Test event"
+
         mock_http_client.get.assert_awaited_once_with(
             "/api/events/",
             params={"changed_at": "2020-04-01"},
         )
+
         fake_client.assert_called_once_with(
-            base_url="http://example.com", headers={"x-api-key": "fake_key"}
+            base_url="http://example.com",
+            headers={"x-api-key": "fake_key"},
+            follow_redirects=True,
         )
 
 
@@ -48,21 +84,55 @@ async def test_get_page():
     with patch(
         "events_aggregator.clients.events_provider.httpx.AsyncClient"
     ) as fake_client:
-        client = EventsProviderClient(base_url="http://example.com", api_key="fake_key")
+        client = EventsProviderClient(
+            base_url="http://example.com",
+            api_key="fake_key",
+        )
 
         mock_http_client = fake_client.return_value
         fake_response = Mock()
         mock_http_client.get = AsyncMock(return_value=fake_response)
+
         fake_json = {
             "next": "http://example_next.com",
-            "results": [{"id": "1", "name": "Test event"}],
+            "previous": None,
+            "results": [
+                {
+                    "id": "550e8400-e29b-41d4-a716-446655440000",
+                    "name": "Test event",
+                    "place": {
+                        "id": "660e8400-e29b-41d4-a716-446655440000",
+                        "name": "Test place",
+                        "city": "Moscow",
+                        "address": "Test address",
+                        "seats_pattern": "A1-100",
+                        "changed_at": "2026-01-01T10:00:00+03:00",
+                        "created_at": "2025-12-01T10:00:00+03:00",
+                    },
+                    "event_time": "2026-01-11T17:00:00+03:00",
+                    "registration_deadline": "2026-01-10T17:00:00+03:00",
+                    "status": "published",
+                    "number_of_visitors": 5,
+                    "changed_at": "2026-01-01T10:00:00+03:00",
+                    "created_at": "2025-12-01T10:00:00+03:00",
+                    "status_changed_at": "2026-01-01T10:00:00+03:00",
+                }
+            ],
         }
+
         next_url = "http://example_next.com"
         fake_response.json.return_value = fake_json
+
         result = await client.get_page(next_url)
-        assert result == fake_json
-        mock_http_client.get.assert_awaited_once_with(next_url)
+
         fake_response.raise_for_status.assert_called_once_with()
+
+        assert result.next == "http://example_next.com"
+        assert result.previous is None
+        assert len(result.results) == 1
+        assert result.results[0].name == "Test event"
+
+        mock_http_client.get.assert_awaited_once_with(next_url)
 
 
 @pytest.mark.asyncio
