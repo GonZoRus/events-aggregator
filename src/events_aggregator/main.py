@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from datetime import date
 from typing import Annotated
 
+import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -151,7 +152,14 @@ async def get_seats(event_id: uuid.UUID) -> SeatsResponse:
         return res
 
     client = EventsProviderClient(EVENTS_PROVIDER_BASE_URL, EVENTS_PROVIDER_API_KEY)
-    seats = await client.seats(event_id)
+    try:
+        seats = await client.seats(event_id)
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            raise HTTPException(status_code=404, detail="Событие не найдено")
+        raise HTTPException(status_code=502, detail="Ошибка внешнего сервиса")
+    except httpx.RequestError:
+        raise HTTPException(status_code=502, detail="Внешний сервис не доступен")
 
     result = SeatsResponse(
         event_id=event_id,
