@@ -23,8 +23,8 @@ from events_aggregator.schemas.event_details import EventDetails
 from events_aggregator.schemas.events import EventResponse, EventsResponse
 from events_aggregator.schemas.seats import SeatsResponse
 from events_aggregator.schemas.tickets import TicketPost, TicketResponse
-from events_aggregator.services.creat_ticket import CreateTicketUsecase
-from events_aggregator.services.delet_ticket import DeleteTicketUsecase
+from events_aggregator.services.create_ticket import CreateTicketUsecase
+from events_aggregator.services.delete_ticket import DeleteTicketUsecase
 from events_aggregator.services.exceptions import (
     EventNotFound,
     ProviderUnavailable,
