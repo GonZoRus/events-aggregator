@@ -4,9 +4,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-POSTGRES_USER = os.getenv("POSTGRES_USER")
+POSTGRES_USER = os.getenv("POSTGRES_USER") or os.getenv("POSTGRES_USERNAME")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
-POSTGRES_DB = os.getenv("POSTGRES_DB")
+POSTGRES_DB = os.getenv("POSTGRES_DB") or os.getenv("POSTGRES_DATABASE_NAME")
 POSTGRES_HOST = os.getenv("POSTGRES_HOST")
 POSTGRES_PORT = os.getenv("POSTGRES_PORT")
 EVENTS_PROVIDER_BASE_URL = os.getenv("EVENTS_PROVIDER_BASE_URL")
