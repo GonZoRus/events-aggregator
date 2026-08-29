@@ -8,7 +8,7 @@ from events_aggregator.repositories.place import PlaceRepository
 from events_aggregator.repositories.sync_metadata import SyncMetadataRepository
 from events_aggregator.services.sync import SyncService
 
-DAY_SECONDS = 10
+DAY_SECONDS = 60*60*24
 
 
 async def run_daily_sync():
