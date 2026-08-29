@@ -3,6 +3,7 @@ import uuid
 from contextlib import asynccontextmanager
 from datetime import date
 from typing import Annotated
+from urllib.parse import urljoin
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
@@ -87,11 +88,14 @@ async def trigger_sync(session: Annotated[AsyncSession, Depends(get_session)]):
     "/api/events", tags=["Получение списка событий"], response_model=EventsResponse
 )
 async def get_events(
+    request: Request,
     session: Annotated[AsyncSession, Depends(get_session)],
     date_from: date | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1),
 ):
+    events_url = urljoin(str(request.base_url), "/api/events/")
+
     event_repository = EventRepository(session)
     count = await event_repository.count_events(date_from=date_from)
     events = await event_repository.get_events(
@@ -100,7 +104,6 @@ async def get_events(
     total_pages = (count + page_size - 1) // page_size
     if count > 0 and page > total_pages:
         raise HTTPException(status_code=404, detail="Страница не найдена")
-
     result = [EventResponse.model_validate(event) for event in events]
 
     next_page = page + 1
@@ -113,17 +116,23 @@ async def get_events(
 
     if next_page:
         if date_from is None:
-            next_url = f"/api/events/?page={next_page}&page_size={page_size}"
+            next_url = events_url + f"?page={next_page}&page_size={page_size}"
         else:
-            next_url = f"/api/events/?date_from={date_from}&page={next_page}&page_size={page_size}"
+            next_url = (
+                events_url
+                + f"?date_from={date_from}&page={next_page}&page_size={page_size}"
+            )
     else:
         next_url = None
 
     if previous_page:
         if date_from is None:
-            previous_url = f"/api/events/?page={previous_page}&page_size={page_size}"
+            previous_url = events_url + f"?page={previous_page}&page_size={page_size}"
         else:
-            previous_url = f"/api/events/?date_from={date_from}&page={previous_page}&page_size={page_size}"
+            previous_url = (
+                events_url
+                + f"?date_from={date_from}&page={previous_page}&page_size={page_size}"
+            )
     else:
         previous_url = None
 
