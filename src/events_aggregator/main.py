@@ -3,7 +3,7 @@ import uuid
 from contextlib import asynccontextmanager
 from datetime import date
 from typing import Annotated
-from urllib.parse import urljoin
+from urllib.parse import urlencode, urljoin
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
@@ -26,6 +26,7 @@ from events_aggregator.schemas.seats import SeatsResponse
 from events_aggregator.schemas.tickets import TicketPost, TicketResponse
 from events_aggregator.services.create_ticket import CreateTicketUsecase
 from events_aggregator.services.delete_ticket import DeleteTicketUsecase
+from events_aggregator.services.events import EventsService
 from events_aggregator.services.exceptions import (
     EventNotFound,
     ProviderUnavailable,
@@ -95,44 +96,44 @@ async def get_events(
     page_size: int = Query(20, ge=1),
 ):
     events_url = urljoin(str(request.base_url), "/api/events/")
-
+    event_service = EventsService()
     event_repository = EventRepository(session)
     count = await event_repository.count_events(date_from=date_from)
     events = await event_repository.get_events(
         page=page, page_size=page_size, date_from=date_from
     )
-    total_pages = (count + page_size - 1) // page_size
-    if count > 0 and page > total_pages:
+
+    total_pages = event_service.get_total_pages(count, page_size)
+
+    if not event_service.is_page_valid(page=page, total_pages=total_pages, count=count):
         raise HTTPException(status_code=404, detail="Страница не найдена")
+
     result = [EventResponse.model_validate(event) for event in events]
 
-    next_page = page + 1
-    if next_page > total_pages:
-        next_page = None
-
-    previous_page = page - 1
-    if previous_page < 1:
-        previous_page = None
+    next_page = event_service.get_next_page(page, total_pages)
+    previous_page = event_service.get_previous_page(page)
 
     if next_page:
-        if date_from is None:
-            next_url = events_url + f"?page={next_page}&page_size={page_size}"
-        else:
-            next_url = (
-                events_url
-                + f"?date_from={date_from}&page={next_page}&page_size={page_size}"
-            )
+        params = {
+            "page": next_page,
+            "page_size": page_size,
+        }
+        if date_from is not None:
+            params["date_from"] = date_from
+
+        next_url = events_url + "?" + urlencode(params)
     else:
         next_url = None
 
     if previous_page:
-        if date_from is None:
-            previous_url = events_url + f"?page={previous_page}&page_size={page_size}"
-        else:
-            previous_url = (
-                events_url
-                + f"?date_from={date_from}&page={previous_page}&page_size={page_size}"
-            )
+        params = {
+            "page": previous_page,
+            "page_size": page_size,
+        }
+        if date_from is not None:
+            params["date_from"] = date_from
+
+        previous_url = events_url + "?" + urlencode(params)
     else:
         previous_url = None
 
