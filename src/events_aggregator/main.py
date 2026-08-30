@@ -29,10 +29,12 @@ from events_aggregator.services.delete_ticket import DeleteTicketUsecase
 from events_aggregator.services.events import EventsService
 from events_aggregator.services.exceptions import (
     EventNotFound,
+    PageNotFound,
     ProviderUnavailable,
     SeatAlreadyTaken,
     TicketNotFound,
 )
+from events_aggregator.services.seats import SeatsService
 from events_aggregator.services.sync import SyncService
 
 
@@ -96,22 +98,24 @@ async def get_events(
     page_size: int = Query(20, ge=1),
 ):
     events_url = urljoin(str(request.base_url), "/api/events/")
-    event_service = EventsService()
+
     event_repository = EventRepository(session)
-    count = await event_repository.count_events(date_from=date_from)
-    events = await event_repository.get_events(
-        page=page, page_size=page_size, date_from=date_from
-    )
-
-    total_pages = event_service.get_total_pages(count, page_size)
-
-    if not event_service.is_page_valid(page=page, total_pages=total_pages, count=count):
+    event_service = EventsService(event_repository)
+    try:
+        (
+            count,
+            events,
+            next_page,
+            previous_page,
+        ) = await event_service.get_the_event_page(
+            page=page,
+            page_size=page_size,
+            date_from=date_from,
+        )
+    except PageNotFound:
         raise HTTPException(status_code=404, detail="Страница не найдена")
 
     result = [EventResponse.model_validate(event) for event in events]
-
-    next_page = event_service.get_next_page(page, total_pages)
-    previous_page = event_service.get_previous_page(page)
 
     if next_page:
         params = {
@@ -174,21 +178,18 @@ async def get_seats(event_id: uuid.UUID) -> SeatsResponse:
         )
         return res
 
-    client = EventsProviderClient(EVENTS_PROVIDER_BASE_URL, EVENTS_PROVIDER_API_KEY)
     try:
-        seats = await client.seats(event_id)
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 404:
-            raise HTTPException(status_code=404, detail="Событие не найдено")
-        raise HTTPException(status_code=502, detail="Ошибка внешнего сервиса")
-    except httpx.RequestError:
+        seats = await seats_service.get_seats(event_id)
+    except EventNotFound:
+        raise HTTPException(status_code=404, detail="Событие не найдено")
+    except ProviderUnavailable:
         raise HTTPException(status_code=502, detail="Внешний сервис не доступен")
 
     result = SeatsResponse(
         event_id=event_id,
         available_seats=seats,
     )
-    save_cached_seats(seats, event_id)
+
     return result
 
 

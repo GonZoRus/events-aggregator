@@ -12,3 +12,7 @@ class ProviderUnavailable(Exception):
 
 class TicketNotFound(Exception):
     pass
+
+
+class PageNotFound(Exception):
+    pass
