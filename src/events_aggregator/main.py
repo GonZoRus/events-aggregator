@@ -5,16 +5,14 @@ from datetime import date
 from typing import Annotated
 from urllib.parse import urlencode, urljoin
 
-import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from events_aggregator.background import run_daily_sync
-from events_aggregator.cache import get_cached_seats, save_cached_seats
 from events_aggregator.clients.events_provider import EventsProviderClient
-from events_aggregator.config import EVENTS_PROVIDER_API_KEY, EVENTS_PROVIDER_BASE_URL
+from events_aggregator.config import settings
 from events_aggregator.db.session import get_session
 from events_aggregator.repositories.event import EventRepository
 from events_aggregator.repositories.place import PlaceRepository
@@ -40,15 +38,23 @@ from events_aggregator.services.sync import SyncService
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    task = asyncio.create_task(run_daily_sync())
+    client = EventsProviderClient(
+        settings.events_provider_base_url,
+        settings.events_provider_api_key,
+    )
+    app.state.events_provider_client = client
+    task = asyncio.create_task(run_daily_sync(client))
 
-    yield
-
-    task.cancel()
     try:
-        await task
-    except asyncio.CancelledError:
-        pass
+        yield
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+        await client.aclose()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -71,11 +77,13 @@ async def health():
 
 
 @app.post("/api/sync/trigger", tags=["Ручная синхронизация"])
-async def trigger_sync(session: Annotated[AsyncSession, Depends(get_session)]):
+async def trigger_sync(
+    request: Request, session: Annotated[AsyncSession, Depends(get_session)]
+):
     event_repository = EventRepository(session)
     place_repository = PlaceRepository(session)
     sync_metadata_repository = SyncMetadataRepository(session)
-    client = EventsProviderClient(EVENTS_PROVIDER_BASE_URL, EVENTS_PROVIDER_API_KEY)
+    client = request.app.state.events_provider_client
     sync_service = SyncService(
         session=session,
         client=client,
@@ -169,14 +177,9 @@ async def get_event_details(
     tags=["Получение информации о местах"],
     response_model=SeatsResponse,
 )
-async def get_seats(event_id: uuid.UUID) -> SeatsResponse:
-    cached = get_cached_seats(event_id)
-    if cached is not None:
-        res = SeatsResponse(
-            event_id=event_id,
-            available_seats=cached["seats"],
-        )
-        return res
+async def get_seats(request: Request, event_id: uuid.UUID) -> SeatsResponse:
+    client = app.state.events_provider_client
+    seats_service = SeatsService(client)
 
     try:
         seats = await seats_service.get_seats(event_id)
@@ -200,10 +203,12 @@ async def get_seats(event_id: uuid.UUID) -> SeatsResponse:
     response_model=TicketResponse,
 )
 async def create_ticket(
-    session: Annotated[AsyncSession, Depends(get_session)], data: TicketPost
+    request: Request,
+    session: Annotated[AsyncSession, Depends(get_session)],
+    data: TicketPost,
 ) -> TicketResponse:
     ticket_repository = TicketRepository(session)
-    client = EventsProviderClient(EVENTS_PROVIDER_BASE_URL, EVENTS_PROVIDER_API_KEY)
+    client = request.app.state.events_provider_client
     create_ticket_usecase = CreateTicketUsecase(
         client=client, ticket_repository=ticket_repository
     )
@@ -229,10 +234,12 @@ async def create_ticket(
 
 @app.delete("/api/tickets/{ticket_id}", tags=["Отмена регистрации"], status_code=200)
 async def delete_ticket(
-    ticket_id: uuid.UUID, session: Annotated[AsyncSession, Depends(get_session)]
+    request: Request,
+    ticket_id: uuid.UUID,
+    session: Annotated[AsyncSession, Depends(get_session)],
 ):
     ticket_repository = TicketRepository(session)
-    client = EventsProviderClient(EVENTS_PROVIDER_BASE_URL, EVENTS_PROVIDER_API_KEY)
+    client = request.app.state.events_provider_client
     delete_ticket_usecase = DeleteTicketUsecase(
         client=client, ticket_repository=ticket_repository
     )

@@ -1,32 +1,30 @@
-import os
+from pydantic import AliasChoices, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from dotenv import load_dotenv
 
-load_dotenv()
+class Settings(BaseSettings):
+    postgres_user: str = Field(
+        validation_alias=AliasChoices("POSTGRES_USER", "POSTGRES_USERNAME")
+    )
+    postgres_password: str
+    postgres_db: str = Field(
+        validation_alias=AliasChoices("POSTGRES_DB", "POSTGRES_DATABASE_NAME")
+    )
+    postgres_host: str
+    postgres_port: int
+    events_provider_base_url: str
+    events_provider_api_key: str
 
-POSTGRES_USER = os.getenv("POSTGRES_USER") or os.getenv("POSTGRES_USERNAME")
-POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
-POSTGRES_DB = os.getenv("POSTGRES_DB") or os.getenv("POSTGRES_DATABASE_NAME")
-POSTGRES_HOST = os.getenv("POSTGRES_HOST")
-POSTGRES_PORT = os.getenv("POSTGRES_PORT")
-EVENTS_PROVIDER_BASE_URL = os.getenv("EVENTS_PROVIDER_BASE_URL")
-EVENTS_PROVIDER_API_KEY = os.getenv("EVENTS_PROVIDER_API_KEY")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+    )
 
-env_dict = {
-    "POSTGRES_USER": POSTGRES_USER,
-    "POSTGRES_PASSWORD": POSTGRES_PASSWORD,
-    "POSTGRES_DB": POSTGRES_DB,
-    "POSTGRES_HOST": POSTGRES_HOST,
-    "POSTGRES_PORT": POSTGRES_PORT,
-    "EVENTS_PROVIDER_BASE_URL": EVENTS_PROVIDER_BASE_URL,
-    "EVENTS_PROVIDER_API_KEY": EVENTS_PROVIDER_API_KEY,
-}
 
-for env_key, env_value in env_dict.items():
-    if not env_value:
-        raise ValueError(f"Переменная окружения {env_key} не задана")
+settings = Settings()
 
 DATABASE_URL = (
-    f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@"
-    f"{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
+    f"postgresql+asyncpg://{settings.postgres_user}:{settings.postgres_password}@"
+    f"{settings.postgres_host}:{settings.postgres_port}/{settings.postgres_db}"
 )

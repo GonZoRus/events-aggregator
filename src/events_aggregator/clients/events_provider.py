@@ -54,6 +54,9 @@ class EventsProviderClient:
         response.raise_for_status()
         return response.json()
 
+    async def aclose(self):
+        await self.client.aclose()
+
 
 class EventsPaginator:
     def __init__(self, client: EventsProviderClient, date):
